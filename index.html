@@ -392,6 +392,10 @@ textarea{resize:vertical; min-height:70px; font-family:var(--font-mono); font-si
     <div style="margin:10px 0;" id="sessMeta"></div>
     <div id="sessLinkWrap" style="margin-bottom:10px;"></div>
     <div id="sessNotes" style="text-align:left; font-family:var(--font-mono); font-size:12px; background:var(--surface); padding:10px; border-radius:10px; max-height:120px; overflow:auto; white-space:pre-wrap;"></div>
+    <div style="display:flex; gap:8px; margin-top:14px;">
+      <button class="btn btn-ghost" style="flex:1;" id="sessPrev">‹ Previous</button>
+      <button class="btn btn-ghost" style="flex:1;" id="sessNext">Next ›</button>
+    </div>
     <div class="session-actions">
       <button class="sa-remember" id="saRemember">✅ Remembered</button>
       <button class="sa-partial" id="saPartial">🤔 Partial</button>
@@ -1011,13 +1015,12 @@ function startSession(){
   document.getElementById('sessionBg').classList.add('open');
   renderSessionCard();
 }
+function finishSession(){
+  document.getElementById('sessionBg').classList.remove('open');
+  saveState(); renderAll();
+  toast('Revision session complete 🎉');
+}
 function renderSessionCard(){
-  if(sessionIdx>=sessionQueue.length){
-    document.getElementById('sessionBg').classList.remove('open');
-    saveState(); renderAll();
-    toast('Revision session complete 🎉');
-    return;
-  }
   const c = sessionQueue[sessionIdx];
   document.getElementById('sessProgress').textContent = `${sessionIdx+1} / ${sessionQueue.length}`;
   document.getElementById('sessName').textContent = c.name;
@@ -1030,11 +1033,23 @@ function renderSessionCard(){
     linkWrap.innerHTML = `<div style="font-size:11.5px; color:var(--text-soft); text-align:left; background:var(--surface); padding:8px 10px; border-radius:9px;">No link saved for this one. Expected time: ${c.expectedTime||'—'} min · Tags: ${escapeHtml(tagsStr)} · Added: ${c.dateAdded||'—'}</div>`;
   }
   document.getElementById('sessNotes').textContent = c.notes || 'No notes yet.';
+  document.getElementById('sessPrev').disabled = sessionIdx===0;
+  document.getElementById('sessPrev').style.opacity = sessionIdx===0 ? .4 : 1;
+  document.getElementById('sessNext').disabled = sessionIdx===sessionQueue.length-1;
+  document.getElementById('sessNext').style.opacity = sessionIdx===sessionQueue.length-1 ? .4 : 1;
 }
 function sessionAct(result){
   const c = sessionQueue[sessionIdx];
-  advance(c, result);
-  sessionIdx++;
+  advance(c, result); // reschedules the card per the spaced-repetition rules
+  saveState();
+  sessionQueue.splice(sessionIdx, 1); // remove it from this session - it's handled, don't show it again
+  if(sessionQueue.length === 0){ finishSession(); return; }
+  if(sessionIdx >= sessionQueue.length) sessionIdx = sessionQueue.length - 1;
+  renderBoard(); renderStatsStrip(); // reflect the move on the board immediately, behind the modal
+  renderSessionCard();
+}
+function sessionGoTo(delta){
+  sessionIdx = Math.min(Math.max(sessionIdx+delta, 0), sessionQueue.length-1);
   renderSessionCard();
 }
 
@@ -1140,6 +1155,8 @@ document.getElementById('sessionBtn').addEventListener('click', startSession);
 document.getElementById('saRemember').addEventListener('click', ()=>sessionAct('remembered'));
 document.getElementById('saPartial').addEventListener('click', ()=>sessionAct('partial'));
 document.getElementById('saForgot').addEventListener('click', ()=>sessionAct('forgot'));
+document.getElementById('sessPrev').addEventListener('click', ()=>sessionGoTo(-1));
+document.getElementById('sessNext').addEventListener('click', ()=>sessionGoTo(1));
 document.getElementById('sessClose').addEventListener('click', ()=>{ document.getElementById('sessionBg').classList.remove('open'); saveState(); renderAll(); });
 
 document.getElementById('calendarBtn').addEventListener('click', ()=>{ document.getElementById('calBg').classList.add('open'); renderCalendar(); });
